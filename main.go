@@ -8,9 +8,12 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	"os"
 	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/joho/godotenv"
+	_ "github.com/joho/godotenv"
 )
 
 func homeHandler(w http.ResponseWriter, r *http.Request) {
@@ -129,10 +132,19 @@ type SensorLog struct {
 var db *sql.DB
 
 func initDB() {
-	// ⚠️ НЕ ЗАБУДЬ ПОСТАВИТЬ СВОЙ ПАРОЛЬ ВМЕСТО 'твой_пароль'
-	connStr := "postgres://postgres:password@localhost:5432/digital_twin?sslmode=disable"
+	// 1. Загружаем файлы из .env в окружение приложения
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal("Ошибка загрузки файла .env")
+	}
 
-	var err error
+	// 2. Достаем строку подключения по её ключу из памяти системы
+	connStr := os.Getenv("DATABASE_URL")
+	if connStr == "" {
+		log.Fatal("Переменная DATABASE_URL не задана в конфигурации")
+	}
+
+	// 3. Открываем соединение, используя безопасную переменную
 	db, err = sql.Open("pgx", connStr)
 	if err != nil {
 		log.Fatalf("Ошибка конфигурации БД: %v", err)
@@ -143,9 +155,8 @@ func initDB() {
 		log.Fatalf("Не удалось подключиться к PostgreSQL: %v", err)
 	}
 
-	fmt.Println("🐘 Успешное подключение к PostgreSQL!")
+	fmt.Println("🐘 Успешное и БЕЗОПАСНОЕ подключение к PostgreSQL!")
 
-	// Автоматически создаем таблицу при старте, если её нет
 	query := `
 	CREATE TABLE IF NOT EXISTS sensor_logs (
 		id SERIAL PRIMARY KEY,
