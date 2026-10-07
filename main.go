@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html/template"
 	"log"
 	"math/rand"
 	"net/http"
@@ -13,7 +14,6 @@ import (
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/joho/godotenv"
-	_ "github.com/joho/godotenv"
 )
 
 func homeHandler(w http.ResponseWriter, r *http.Request) {
@@ -127,6 +127,7 @@ type SensorLog struct {
 	SensorName string  `json:"sensor_name"`
 	Value      float64 `json:"value"`
 	CreatedAt  string  `json:"created_at"`
+	IsCritical bool    `json:"is_critical"`
 }
 
 var db *sql.DB
@@ -219,10 +220,51 @@ func getHistoryHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(jsonBytes)
 }
 
+// ////////////////////////
+// 🟢 ВСПЛЫВАЮЩИЙ ГЛАВНЫЙ ХЕНДЛЕР: рендерит HTML-страницу с логами из БД
+func dashboardHandler(w http.ResponseWriter, r *http.Request) {
+	// 1. Достаем последние 10 логов из базы, как делали раньше
+	rows, err := db.Query("SELECT id, sensor_name, value, to_char(created_at, 'DD.MM.YYYY HH24:MI:SS') FROM sensor_logs ORDER BY id DESC LIMIT 10;")
+	if err != nil {
+		http.Error(w, "Ошибка чтения из БД: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var history []SensorLog
+	for rows.Next() {
+		var l SensorLog
+		err := rows.Scan(&l.ID, &l.SensorName, &l.Value, &l.CreatedAt)
+		if err != nil {
+			http.Error(w, "Ошибка сканирования строки: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		// 🧠 Проверяем температуру прямо здесь! Если выше 75 градусов — флаг становится true
+		if l.Value > 75.0 {
+			l.IsCritical = true
+		}
+
+		history = append(history, l)
+	}
+
+	// 2. Загружаем наш HTML-файл из папки templates
+	tmpl, err := template.ParseFiles("templates/index.html")
+	if err != nil {
+		http.Error(w, "Ошибка компиляции шаблона: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// 3. Соединяем шаблон с массивом данных history и отправляем в ResponseWriter
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	tmpl.Execute(w, history)
+}
+
 func main() {
 	initDB()
 	defer db.Close()
-	http.HandleFunc("/", homeHandler)
+	http.HandleFunc("/", dashboardHandler)
+	http.HandleFunc("/home", homeHandler)
 	http.HandleFunc("/status", statusHandler)
 	http.HandleFunc("/satellite", satelliteHandler)
 	http.HandleFunc("/aggregate", aggregateHandler)

@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Панель Мониторинга — БЮРО 1440</title>
+    <style>
+        :root {
+            --bg-space: #0a0f1d;
+            --panel-bg: #111827;
+            --neon-cyan: #00f0ff;
+            --neon-red: #ff0055;
+            --text-main: #e5e7eb;
+        }
+        body {
+            background-color: var(--bg-space);
+            color: var(--text-main);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid #1f2937;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+        }
+        h1 {
+            color: var(--neon-cyan);
+            margin: 0;
+            font-size: 28px;
+            letter-spacing: 2px;
+            text-shadow: 0 0 10px rgba(0, 240, 255, 0.3);
+        }
+        .subtitle {
+            color: #9ca3af;
+            margin: 5px 0 0 0;
+            font-size: 13px;
+            text-transform: uppercase;
+        }
+        .btn-group {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        .btn-main {
+            background: linear-gradient(135deg, #008b99, #00f0ff);
+            color: #000;
+            font-weight: bold;
+            padding: 12px 24px;
+            border-radius: 6px;
+            text-decoration: none;
+            text-transform: uppercase;
+            font-size: 13px;
+            box-shadow: 0 0 15px rgba(0, 240, 255, 0.4);
+            transition: 0.2s;
+            border: none;
+            cursor: pointer;
+        }
+        .btn-main:hover {
+            box-shadow: 0 0 25px var(--neon-cyan);
+            transform: translateY(-1px);
+        }
+        .btn-sec {
+            border: 1px solid #374151;
+            color: #9ca3af;
+            padding: 12px 24px;
+            border-radius: 6px;
+            text-decoration: none;
+            font-size: 13px;
+            transition: 0.2s;
+        }
+        .btn-sec:hover {
+            background-color: #1f2937;
+            color: #fff;
+        }
+        .matrix-table {
+            width: 100%;
+            border-collapse: collapse;
+            background-color: var(--panel-bg);
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid #1f2937;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+        th {
+            background-color: #1f2937;
+            color: var(--neon-cyan);
+            padding: 14px 20px;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        td {
+            padding: 14px 20px;
+            border-bottom: 1px solid #1f2937;
+            font-size: 14px;
+        }
+        tr:hover {
+            background-color: rgba(255, 255, 255, 0.02);
+        }
+        .badge {
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-weight: bold;
+        }
+        /* Стили статусов на основе флага из Go */
+        .badge-normal {
+            background-color: rgba(0, 240, 255, 0.1);
+            color: var(--neon-cyan);
+            border: 1px solid rgba(0, 240, 255, 0.3);
+        }
+        .badge-critical {
+            background-color: rgba(255, 0, 85, 0.15);
+            color: var(--neon-red);
+            border: 1px solid rgba(255, 0, 85, 0.4);
+            animation: pulse 2s infinite;
+            text-shadow: 0 0 5px rgba(255, 0, 85, 0.5);
+        }
+        @keyframes pulse {
+            0% { opacity: 0.8; }
+            50% { opacity: 1; }
+            100% { opacity: 0.8; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <header>
+            <div>
+                <h1>СИСТЕМА КОНТРОЛЯ ТЕЛЕМЕТРИИ</h1>
+                <div class="subtitle">Цифровой двойник спутниковой группировки связи</div>
+            </div>
+        </header>
+
+        <div class="btn-group">
+            <a href="/save" class="btn-main">⚡ Запросить борт-компьютер</a>
+            <a href="/" class="btn-sec">🔄 Синхронизировать</a>
+        </div>
+
+        <table class="matrix-table">
+            <thead>
+                <tr>
+                    <th>ID параметра</th>
+                    <th>Наименование модуля</th>
+                    <th>Показания датчика</th>
+                    <th style="text-align: right;">Метка времени (UTC)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .}}
+                <tr>
+                    <td style="font-family: monospace; color: #4b5563;">#{{.ID}}</td>
+                    <td style="font-weight: 600;">{{.SensorName}}</td>
+                    <td>
+                        <!-- Простая работающая проверка флага, созданного в Go -->
+                        {{if .IsCritical}}
+                        <span class="badge badge-critical">🔥 {{.Value}} °C [ПЕРЕГРЕВ]</span>
+                        {{else}}
+                        <span class="badge badge-normal">🟢 {{.Value}} °C</span>
+                        {{end}}
+                    </td>
+                    <td style="text-align: right; font-family: monospace; color: #9ca3af;">{{.CreatedAt}}</td>
+                </tr>
+                {{else}}
+                <tr>
+                    <td colspan="4" style="text-align: center; color: #4b5563; padding: 40px;">
+                        Ожидание первого сеанса связи. База данных пуста.
+                    </td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+
+</body>
+</html>

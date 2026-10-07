@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  # Наша база данных PostgreSQL
+  postgres_db:
+    image: postgres:16-alpine
+    container_name: twin_postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password # Задай надежный пароль
+      POSTGRES_DB: digital_twin
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  # Наше Go-приложение (Цифровой двойник)
+  web_app:
+    build: .
+    container_name: twin_web_server
+    ports:
+      - "8080:8080"
+    environment:
+      # Важно: вместо localhost мы пишем имя сервиса базы данных 'postgres_db'
+      # Docker автоматически свяжет их во внутреннюю сеть контейнеров
+      DATABASE_URL: "postgres://postgres:password@postgres_db:5432/digital_twin?sslmode=disable"
+    depends_on:
+      - postgres_db
+
+volumes:
+  pgdata:
