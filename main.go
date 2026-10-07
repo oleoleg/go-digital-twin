@@ -241,9 +241,7 @@ func dashboardHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// 🧠 Проверяем температуру прямо здесь! Если выше 75 градусов — флаг становится true
-		if l.Value > 75.0 {
-			l.IsCritical = true
-		}
+		l.IsCritical = IsSensorValueCritical(l.Value)
 
 		history = append(history, l)
 	}
@@ -258,6 +256,15 @@ func dashboardHandler(w http.ResponseWriter, r *http.Request) {
 	// 3. Соединяем шаблон с массивом данных history и отправляем в ResponseWriter
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	tmpl.Execute(w, history)
+}
+
+// IsSensorValueCritical проверяет, превышает ли температура норму в 75 градусов.
+// Мы вынесли это в отдельную функцию, чтобы её можно было протестировать изолированно от базы данных.
+func IsSensorValueCritical(val float64) bool {
+	if val > 75.0 {
+		return true
+	}
+	return false
 }
 
 func main() {
