@@ -14,6 +14,10 @@ import (
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/joho/godotenv"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func homeHandler(w http.ResponseWriter, r *http.Request) {
@@ -174,6 +178,9 @@ func initDB() {
 
 // 1. Хендлер для ЗАПИСИ данных (Имитируем работу датчика)
 func saveTelemetryHandler(w http.ResponseWriter, r *http.Request) {
+	// Увеличиваем счетчик запросов для пути "/save"
+	httpRequestsTotal.WithLabelValues("/save").Inc()
+
 	name := "Датчик-ТКС-1440"
 	val := rand.Float64() * 100 // Случайная температура
 
@@ -188,6 +195,11 @@ func saveTelemetryHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	fmt.Fprintf(w, "✅ Успешно сохранено! %s показал %.2f °C", name, val)
+
+	// Фиксируем перегрев СТРОГО в момент реального перегрева при генерации!
+	if val > 75.0 {
+		satelliteOverheatsTotal.Inc()
+	}
 }
 
 // 2. Хендлер для ЧТЕНИЯ истории из базы данных
@@ -224,6 +236,10 @@ func getHistoryHandler(w http.ResponseWriter, r *http.Request) {
 // ////////////////////////
 // 🟢 ВСПЛЫВАЮЩИЙ ГЛАВНЫЙ ХЕНДЛЕР: рендерит HTML-страницу с логами из БД
 func dashboardHandler(w http.ResponseWriter, r *http.Request) {
+
+	// Увеличиваем счетчик запросов конкретно для пути "/"
+	httpRequestsTotal.WithLabelValues("/").Inc()
+
 	// 1. Достаем последние 15 логов из базы
 	rows, err := db.Query("SELECT id, sensor_name, value, to_char(created_at, 'DD.MM.YYYY HH24:MI:SS') FROM sensor_logs ORDER BY id DESC LIMIT 15;")
 	if err != nil {
@@ -279,6 +295,29 @@ type PageData struct {
 	Logs         []SensorLog // Наш привычный массив логов
 }
 
+// ///////////////////////////////
+// Описываем наши SRE-метрики
+var (
+	// Счетчик общего количества запросов
+	httpRequestsTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "digital_twin_http_requests_total",
+			Help: "Общее количество обработанных HTTP-запросов сервером",
+		},
+		[]string{"path"}, // Тег (label) для фильтрации по роутам
+	)
+
+	// Счетчик перегревов спутника
+	satelliteOverheatsTotal = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "digital_twin_satellite_overheats_total",
+			Help: "Общее количество зафиксированных критических перегревов (>75°C)",
+		},
+	)
+)
+
+///////////////////////////////////////////
+
 // IsSensorValueCritical проверяет, превышает ли температура норму в 75 градусов.
 // Мы вынесли это в отдельную функцию, чтобы её можно было протестировать изолированно от базы данных.
 func IsSensorValueCritical(val float64) bool {
@@ -306,8 +345,9 @@ func main() {
 	http.HandleFunc("/aggregate", aggregateHandler)
 	http.HandleFunc("/save", saveTelemetryHandler)
 	http.HandleFunc("/history", getHistoryHandler)
+	http.Handle("/metrics", promhttp.Handler())
 
-	fmt.Println("🚀 Сервер запущен на http://localhost:8080")
+	fmt.Println("🚀 Сервер с Prometheus-метриками запущен на http://localhost:8080")
 	err = http.ListenAndServe(":8080", nil)
 	if err != nil {
 		fmt.Println("Ошибка запуска сервера:", err)
