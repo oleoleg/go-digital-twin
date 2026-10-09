@@ -136,8 +136,11 @@
     <div class="container">
         <header>
             <div>
-                <h1>СИСТЕМА КОНТРОЛЯ ТЕЛЕМЕТРИИ</h1>
-                <div class="subtitle">Цифровой двойник спутниковой группировки связи</div>
+                <h1>ЦЕНТР УПРАВЛЕНИЯ ПОЛЕТАМИ</h1>
+                <p>Оператор: {{.OperatorName}} | Версия ЦД: {{.AppVersion}}</p>
+            </div>
+            <div class="stats-badge">
+                Всего логов в СУБД: <strong>{{.TotalLogs}}</strong>
             </div>
         </header>
 
@@ -156,7 +159,7 @@
                 </tr>
             </thead>
             <tbody>
-                {{range .}}
+                {{range .Logs}}
                 <tr>
                     <td style="font-family: monospace; color: #4b5563;">#{{.ID}}</td>
                     <td style="font-weight: 600;">{{.SensorName}}</td>

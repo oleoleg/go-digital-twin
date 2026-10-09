@@ -247,22 +247,36 @@ func dashboardHandler(w http.ResponseWriter, r *http.Request) {
 		history = append(history, l)
 	}
 
-	// 2. Загружаем наш HTML-файл из папки templates
-	// tmpl, err := template.ParseFiles("templates/index.html")
-	// if err != nil {
-	// 	http.Error(w, "Ошибка компиляции шаблона: "+err.Error(), http.StatusInternalServerError)
-	// 	return
-	// }
+	// 2. Считаем общее количество записей в таблице для статистики
+	var total int
+	db.QueryRow("SELECT COUNT(*) FROM sensor_logs;").Scan(&total)
+
+	// 3. Создаем и заполняем нашу Обертку
+	data := PageData{
+		OperatorName: "Олег",        // Передали одиночную строку
+		AppVersion:   "v2.4.1-beta", // Еще одна строка
+		TotalLogs:    total,         // Передали одиночное число
+		Logs:         history,       // Передали наш массив
+	}
 
 	// 3. Соединяем шаблон с массивом данных history и отправляем в ResponseWriter
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 
 	// ⚡ ИСПОЛЬЗУЕМ КЭШ: Просто берем уже готовый скомпилированный шаблон tmpl
-	err = tmpl.Execute(w, history)
+	err = tmpl.Execute(w, data)
 	if err != nil {
 		http.Error(w, "Ошибка рендеринга: "+err.Error(), http.StatusInternalServerError)
 	}
 
+}
+
+// ////////////////////////////////
+// PageData объединяет ВСЕ данные, которые нужны для отображения на странице
+type PageData struct {
+	OperatorName string      // Имя инженера
+	AppVersion   string      // Версия системы
+	TotalLogs    int         // Общее число строк в БД
+	Logs         []SensorLog // Наш привычный массив логов
 }
 
 // IsSensorValueCritical проверяет, превышает ли температура норму в 75 градусов.
