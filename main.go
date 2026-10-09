@@ -131,6 +131,7 @@ type SensorLog struct {
 }
 
 var db *sql.DB
+var tmpl *template.Template // Добавили глобальный кэш шаблона
 
 func initDB() {
 	// 1. Загружаем файлы из .env в окружение приложения
@@ -223,8 +224,8 @@ func getHistoryHandler(w http.ResponseWriter, r *http.Request) {
 // ////////////////////////
 // 🟢 ВСПЛЫВАЮЩИЙ ГЛАВНЫЙ ХЕНДЛЕР: рендерит HTML-страницу с логами из БД
 func dashboardHandler(w http.ResponseWriter, r *http.Request) {
-	// 1. Достаем последние 10 логов из базы, как делали раньше
-	rows, err := db.Query("SELECT id, sensor_name, value, to_char(created_at, 'DD.MM.YYYY HH24:MI:SS') FROM sensor_logs ORDER BY id DESC LIMIT 10;")
+	// 1. Достаем последние 15 логов из базы
+	rows, err := db.Query("SELECT id, sensor_name, value, to_char(created_at, 'DD.MM.YYYY HH24:MI:SS') FROM sensor_logs ORDER BY id DESC LIMIT 15;")
 	if err != nil {
 		http.Error(w, "Ошибка чтения из БД: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -247,15 +248,21 @@ func dashboardHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 2. Загружаем наш HTML-файл из папки templates
-	tmpl, err := template.ParseFiles("templates/index.html")
-	if err != nil {
-		http.Error(w, "Ошибка компиляции шаблона: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
+	// tmpl, err := template.ParseFiles("templates/index.html")
+	// if err != nil {
+	// 	http.Error(w, "Ошибка компиляции шаблона: "+err.Error(), http.StatusInternalServerError)
+	// 	return
+	// }
 
 	// 3. Соединяем шаблон с массивом данных history и отправляем в ResponseWriter
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	tmpl.Execute(w, history)
+
+	// ⚡ ИСПОЛЬЗУЕМ КЭШ: Просто берем уже готовый скомпилированный шаблон tmpl
+	err = tmpl.Execute(w, history)
+	if err != nil {
+		http.Error(w, "Ошибка рендеринга: "+err.Error(), http.StatusInternalServerError)
+	}
+
 }
 
 // IsSensorValueCritical проверяет, превышает ли температура норму в 75 градусов.
@@ -270,6 +277,14 @@ func IsSensorValueCritical(val float64) bool {
 func main() {
 	initDB()
 	defer db.Close()
+
+	var err error
+	// 🧠 Компилируем HTML один раз при запуске приложения
+	tmpl, err = template.ParseFiles("templates/index.html")
+	if err != nil {
+		log.Fatalf("Ошибка компиляции шаблона при старте: %v", err)
+	}
+
 	http.HandleFunc("/", dashboardHandler)
 	http.HandleFunc("/home", homeHandler)
 	http.HandleFunc("/status", statusHandler)
@@ -279,7 +294,7 @@ func main() {
 	http.HandleFunc("/history", getHistoryHandler)
 
 	fmt.Println("🚀 Сервер запущен на http://localhost:8080")
-	err := http.ListenAndServe(":8080", nil)
+	err = http.ListenAndServe(":8080", nil)
 	if err != nil {
 		fmt.Println("Ошибка запуска сервера:", err)
 	}

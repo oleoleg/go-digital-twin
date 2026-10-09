@@ -1,6 +1,10 @@
 package main
 
 import (
+	"html/template"
+	"net/http"
+	"net/http/httptest"
+	"sync"
 	"testing"
 )
 
@@ -28,6 +32,8 @@ func TestIsSensorValueCritical_Critical(t *testing.T) {
 		t.Errorf("Ошибка! Для температуры %.1f ожидали %t, но получили %t", inputValue, expected, result)
 	}
 }
+
+////////////////////////////////////////
 
 func TestIsSensorValueCritical_TableDriven(t *testing.T) {
 	// 1. Определяем "таблицу" тестов.
@@ -65,5 +71,43 @@ func BenchmarkIsSensorValueCritical(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		// Вызываем тестируемую функцию с любым значением
 		IsSensorValueCritical(65.4)
+	}
+}
+
+// ////////////////////////////
+// sync.Once гарантирует, что база данных подключится ровно ОДИН раз
+// для всех бенчмарков, чтобы не перегружать СУБД при тестах.
+var initDbOnce sync.Once
+
+func BenchmarkDashboardHandler(b *testing.B) {
+	// 1. Инициализируем базу данных, загружаем .env и парсем шаблон (только при первом запуске бенчмарка)
+	initDbOnce.Do(func() {
+		initDB()
+		tmpl, _ = template.ParseFiles("templates/index.html")
+	})
+
+	// 2. Создаем фейковый запрос методом GET на коренной URL "/"
+	req, err := http.NewRequest("GET", "/", nil)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	// 3. Сбрасываем таймер бенчмарка непосредственно перед запуском цикла.
+	// Время, потраченное на подключение к базе данных выше, не должно портить нам статистику!
+	b.ResetTimer()
+
+	// 4. Запускаем главный цикл замера производительности
+	for i := 0; i < b.N; i++ {
+		// httptest.NewRecorder() — это фейковый "получатель ответа" (вместо реального браузера)
+		rr := httptest.NewRecorder()
+
+		// Напрямую вызываем наш хендлер, передавая ему фейковый ответ и фейковый запрос
+		dashboardHandler(rr, req)
+
+		// Дополнительная SRE-проверка внутри бенчмарка:
+		// Если сервер вдруг ответил не 200 OK, значит что-то сломалось, прерываем тест.
+		if rr.Code != http.StatusOK {
+			b.Fatalf("Сервер вернул статус %d вместо 200", rr.Code)
+		}
 	}
 }
